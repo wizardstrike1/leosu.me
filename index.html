@@ -283,6 +283,39 @@
       document.addEventListener("click", function () {
         wrap.classList.remove("is-tip-open");
       });
+
+      var yousmell = [
+        "ArrowUp",
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowLeft",
+        "ArrowRight",
+        "b",
+        "a",
+        "Enter"
+      ];
+      var a = 0;
+
+      document.addEventListener("keydown", function (e) {
+        var key = e.key;
+        if (key.length === 1) {
+          key = key.toLowerCase();
+        }
+
+        if (key === yousmell[a]) {
+          a += 1;
+          if (a === yousmell.length) {
+            a = 0;
+            window.location.href = "/idk/";
+          }
+          return;
+        }
+
+        a = key === yousmell[0] ? 1 : 0;
+      });
     })();
   </script>
 </body>
