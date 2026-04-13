@@ -178,10 +178,10 @@
       <h1>Leo Su</h1>
       <p class="role">TJHSST Class of 2028</p>
       <p>
-        1.6 Weighted GPA, 760 SAT, TJ valedictorian
+        -0.5 Weighted GPA, 13 SAT, TJ valedictorian
       </p>
       <p>
-        I play video games
+        this website is 100% vibe coded
       </p>
       <nav class="links" aria-label="Contact and profiles">
         <a
@@ -260,23 +260,23 @@
       var btn = wrap && wrap.querySelector("button");
       if (!wrap || !btn) return;
 
-      var EGG_CLICKS = 10;
-      var EGG_GAP_MS = 450;
-      var eggCount = 0;
-      var eggLast = 0;
+      var poopy = 3;
+      var yomama = 450;
+      var zainmarshal = 0;
+      var mrrose = 0;
 
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
         wrap.classList.toggle("is-tip-open");
 
         var now = Date.now();
-        if (now - eggLast > EGG_GAP_MS) {
-          eggCount = 0;
+        if (now - mrrose > yomama) {
+          zainmarshal = 0;
         }
-        eggLast = now;
-        eggCount += 1;
-        if (eggCount >= EGG_CLICKS) {
-          eggCount = 0;
+        mrrose = now;
+        zainmarshal += 1;
+        if (zainmarshal >= poopy) {
+          zainmarshal = 0;
           window.location.href = "/pi/";
         }
       });
