@@ -259,9 +259,26 @@
       var wrap = document.querySelector(".discord-wrap");
       var btn = wrap && wrap.querySelector("button");
       if (!wrap || !btn) return;
+
+      var EGG_CLICKS = 10;
+      var EGG_GAP_MS = 450;
+      var eggCount = 0;
+      var eggLast = 0;
+
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
         wrap.classList.toggle("is-tip-open");
+
+        var now = Date.now();
+        if (now - eggLast > EGG_GAP_MS) {
+          eggCount = 0;
+        }
+        eggLast = now;
+        eggCount += 1;
+        if (eggCount >= EGG_CLICKS) {
+          eggCount = 0;
+          window.location.href = "/pi/";
+        }
       });
       document.addEventListener("click", function () {
         wrap.classList.remove("is-tip-open");
