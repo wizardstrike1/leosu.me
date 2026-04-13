@@ -96,27 +96,43 @@
 
     .typer-stage {
       --typer-fs: clamp(2.35rem, 9vw, 4.5rem);
+      --typer-ls: 0.02em;
+      --typer-nudge: clamp(1.35rem, 5vw, 4rem);
       position: relative;
       width: 100%;
       min-height: clamp(5.5rem, 12vw, 8rem);
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: center;
-      justify-content: center;
+      column-gap: 0;
       font-size: var(--typer-fs);
       line-height: 1.15;
+      transform: translateX(var(--typer-nudge));
+    }
+
+    .typer-left {
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .typer-mid {
+      flex-shrink: 0;
+      width: clamp(3px, 0.35vw, 4px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      align-self: stretch;
     }
 
     .typer-caret {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: clamp(3px, 0.35vw, 4px);
+      width: 100%;
       height: 1.15em;
       background: var(--accent);
       border-radius: 1px;
       animation: caret-blink 1.05s steps(1, end) infinite;
-      z-index: 2;
       pointer-events: none;
     }
 
@@ -131,12 +147,36 @@
       }
     }
 
+    .typer-right {
+      min-width: 0;
+      overflow: hidden;
+      text-align: left;
+      white-space: nowrap;
+      font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+      font-size: inherit;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.15;
+      letter-spacing: var(--typer-ls);
+      color: #8a8883;
+      margin-left: -0.04em;
+      padding-left: 0.06em;
+      opacity: 0;
+      transition: none;
+    }
+
+    .typer-right.is-on {
+      opacity: 1;
+      transition: opacity 1.35s ease;
+    }
+
+    .typer-right .hint-ch {
+      display: inline;
+    }
+
     .typer-track {
-      position: absolute;
-      right: 50%;
-      top: 50%;
-      transform: translateY(-50%);
-      padding-right: 0.42em;
+      position: relative;
+      padding-right: 0.02em;
       text-align: right;
       white-space: nowrap;
       width: max-content;
@@ -146,7 +186,7 @@
       font-weight: 500;
       font-variant-numeric: tabular-nums;
       line-height: 1.15;
-      letter-spacing: 0.02em;
+      letter-spacing: var(--typer-ls);
       overflow: visible;
     }
 
@@ -168,21 +208,34 @@
       font-weight: 700;
     }
 
-    .typer-track .hint-reveal {
-      display: inline;
-      margin-left: 0.25em;
-      padding-left: 0.05em;
-      font-family: inherit;
-      font-size: 0.72em;
-      font-weight: 500;
-      color: #8a8883;
-      letter-spacing: 0.14em;
+    .typer-track .bad-wrap {
+      position: relative;
+      display: inline-block;
       vertical-align: baseline;
-      opacity: 0;
-      animation: hint-reveal-in 1.85s ease forwards;
     }
 
-    @keyframes hint-reveal-in {
+    .typer-track .bad-wrap .ch.bad {
+      opacity: 0.2;
+    }
+
+    .typer-track .bad-wrap .bad-x {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--text);
+      font-size: 1.12em;
+      font-weight: 800;
+      line-height: 1;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .typer-track .ch-new {
+      animation: ch-fade 320ms cubic-bezier(0.33, 1, 0.68, 1) both;
+    }
+
+    @keyframes ch-fade {
       from {
         opacity: 0;
       }
@@ -257,6 +310,12 @@
       align-items: center;
     }
 
+    #reset.is-inert {
+      visibility: hidden;
+      pointer-events: none;
+      user-select: none;
+    }
+
     .actions button {
       font-family: "EB Garamond", "Georgia", serif;
       font-size: 1rem;
@@ -296,14 +355,19 @@
       </div>
       <div class="typer-wrap">
         <div class="typer-stage" aria-label="Pi typing">
-          <div id="track" class="typer-track" aria-live="polite" aria-atomic="true"></div>
-          <div class="typer-caret" aria-hidden="true"></div>
+          <div class="typer-left">
+            <div id="track" class="typer-track" aria-live="polite" aria-atomic="true"></div>
+          </div>
+          <div class="typer-mid" aria-hidden="true">
+            <div class="typer-caret"></div>
+          </div>
+          <div id="hintTrack" class="typer-right" aria-hidden="true"></div>
         </div>
       </div>
       <p id="hint" class="hint-sr" role="status" aria-live="polite"></p>
       <div class="keypad" id="keypad" aria-label="Digit keypad"></div>
       <div class="actions">
-        <button type="button" id="reset" class="primary" hidden>Reset</button>
+        <button type="button" id="reset" class="primary is-inert" aria-hidden="true" tabindex="-1">Reset</button>
       </div>
     </main>
   </div>
@@ -317,6 +381,7 @@
 
       var stage = document.querySelector(".typer-stage");
       var track = document.getElementById("track");
+      var hintTrack = document.getElementById("hintTrack");
       var counterEl = document.getElementById("counter");
       var hintEl = document.getElementById("hint");
       var keypad = document.getElementById("keypad");
@@ -324,6 +389,17 @@
 
       var typed = "";
       var locked = false;
+
+      var CH_MOVE_MS = 320;
+      var CH_MOVE_EASING = "cubic-bezier(0.33, 1, 0.68, 1)";
+
+      function clearTrackFlipListeners() {
+        var prev = track._flipOnEnd;
+        if (prev) {
+          track.removeEventListener("transitionend", prev);
+          track._flipOnEnd = null;
+        }
+      }
 
       function matchedDigitCount() {
         if (locked && typed.length) {
@@ -339,7 +415,23 @@
         return PI.slice(fromIndex, fromIndex + 5);
       }
 
-      function renderTrack() {
+      function clearHintTrack() {
+        if (!hintTrack) return;
+        hintTrack.classList.remove("is-on");
+        hintTrack.textContent = "";
+        hintTrack.setAttribute("aria-hidden", "true");
+      }
+
+      function renderTrack(opts) {
+        opts = opts || {};
+        var prevRect = null;
+        if (opts.flip && track.firstChild) {
+          prevRect = track.getBoundingClientRect();
+        }
+        clearTrackFlipListeners();
+        clearHintTrack();
+        track.style.transition = "";
+        track.style.transform = "";
         track.textContent = "";
         for (var i = 0; i < PREFIX.length; i++) {
           var ps = document.createElement("span");
@@ -351,16 +443,47 @@
           var s = document.createElement("span");
           s.className = "ch ok";
           s.textContent = typed[j];
+          if (j === typed.length - 1) {
+            s.className = "ch ok ch-new";
+          }
           track.appendChild(s);
         }
         counterEl.textContent = String(matchedDigitCount());
         if (!locked) {
           hintEl.textContent = "";
         }
+        if (opts.flip && prevRect) {
+          var nextRect = track.getBoundingClientRect();
+          var dx = prevRect.left - nextRect.left;
+          if (Math.abs(dx) > 0.25) {
+            track.style.transition = "none";
+            track.style.transform = "translateX(" + dx + "px)";
+            void track.offsetWidth;
+            requestAnimationFrame(function () {
+              track.style.transition =
+                "transform " + CH_MOVE_MS + "ms " + CH_MOVE_EASING;
+              track.style.transform = "translateX(0)";
+            });
+            var onEnd = function (ev) {
+              if (ev.propertyName !== "transform") return;
+              track.removeEventListener("transitionend", onEnd);
+              track._flipOnEnd = null;
+              track.style.transition = "";
+              track.style.transform = "";
+            };
+            track._flipOnEnd = onEnd;
+            track.addEventListener("transitionend", onEnd);
+          }
+        }
       }
 
       function renderWrong(nextHint) {
+        clearTrackFlipListeners();
+        track.style.transition = "";
+        track.style.transform = "";
+        clearHintTrack();
         track.textContent = "";
+
         for (var i = 0; i < PREFIX.length; i++) {
           var ps = document.createElement("span");
           ps.className = "ch prefix";
@@ -368,17 +491,37 @@
           track.appendChild(ps);
         }
         for (var j = 0; j < typed.length; j++) {
-          var s = document.createElement("span");
-          s.className = j === typed.length - 1 ? "ch bad" : "ch ok";
-          s.textContent = typed[j];
-          track.appendChild(s);
+          if (j === typed.length - 1) {
+            var wrap = document.createElement("span");
+            wrap.className = "bad-wrap";
+            var bad = document.createElement("span");
+            bad.className = "ch bad";
+            bad.textContent = typed[j];
+            var mark = document.createElement("span");
+            mark.className = "bad-x";
+            mark.setAttribute("aria-hidden", "true");
+            mark.textContent = "\u00d7";
+            wrap.appendChild(bad);
+            wrap.appendChild(mark);
+            track.appendChild(wrap);
+          } else {
+            var s = document.createElement("span");
+            s.className = "ch ok";
+            s.textContent = typed[j];
+            track.appendChild(s);
+          }
         }
-        if (nextHint) {
-          var hint = document.createElement("span");
-          hint.className = "hint-reveal";
-          hint.setAttribute("aria-hidden", "true");
-          hint.textContent = nextHint.split("").join(" ");
-          track.appendChild(hint);
+        if (nextHint && hintTrack) {
+          for (var k = 0; k < nextHint.length; k++) {
+            var hc = document.createElement("span");
+            hc.className = "hint-ch";
+            hc.textContent = nextHint[k];
+            hintTrack.appendChild(hc);
+          }
+          hintTrack.setAttribute("aria-hidden", "false");
+          requestAnimationFrame(function () {
+            hintTrack.classList.add("is-on");
+          });
         }
         counterEl.textContent = String(matchedDigitCount());
         hintEl.textContent =
@@ -387,7 +530,9 @@
 
       function setLocked(on) {
         locked = on;
-        resetBtn.hidden = !on;
+        resetBtn.classList.toggle("is-inert", !on);
+        resetBtn.setAttribute("aria-hidden", on ? "false" : "true");
+        resetBtn.tabIndex = on ? 0 : -1;
         if (stage) {
           stage.classList.toggle("is-locked", on);
         }
@@ -409,13 +554,14 @@
           return;
         }
         typed += c;
-        renderTrack();
+        renderTrack({ flip: true });
       }
 
       function reset() {
         typed = "";
         locked = false;
         hintEl.textContent = "";
+        clearHintTrack();
         setLocked(false);
         renderTrack();
       }
