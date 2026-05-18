@@ -342,6 +342,146 @@
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
+
+    .leaderboard {
+      width: min(22rem, 90vw);
+      margin: 1.5rem auto 0;
+      border-top: 1px solid var(--line);
+      padding-top: 1.25rem;
+      display: none;
+    }
+
+    .leaderboard.is-on {
+      display: block;
+    }
+
+    .leaderboard h2 {
+      margin: 0 0 0.85rem;
+      font-size: clamp(1.05rem, 1rem + 0.3vw, 1.25rem);
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .lb-list {
+      list-style: none;
+      margin: 0 0 1rem;
+      padding: 0;
+    }
+
+    .lb-list li {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      padding: 0.32rem 0.15rem;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.95rem;
+    }
+
+    .lb-list li:last-child {
+      border-bottom: none;
+    }
+
+    .lb-list li.lb-empty {
+      justify-content: center;
+      color: var(--muted);
+      border-bottom: none;
+    }
+
+    .lb-rank {
+      width: 1.7rem;
+      flex-shrink: 0;
+      color: var(--muted);
+      font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+      font-size: 0.82rem;
+      text-align: right;
+    }
+
+    .lb-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .lb-score {
+      flex-shrink: 0;
+      font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+
+    .lb-list li.is-you .lb-name {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .lb-status {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin: 0 0 1rem;
+      min-height: 1.2em;
+    }
+
+    .lb-status.is-good {
+      color: var(--ok);
+    }
+
+    .lb-status.is-bad {
+      color: var(--bad);
+    }
+
+    .lb-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .lb-form input {
+      flex: 1 1 10rem;
+      min-width: 0;
+      font-family: "EB Garamond", "Georgia", serif;
+      font-size: 1rem;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid var(--line);
+      border-radius: 0.35rem;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .lb-form input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    .lb-form button {
+      font-family: "EB Garamond", "Georgia", serif;
+      font-size: 1rem;
+      padding: 0.45rem 1rem;
+      border-radius: 0.35rem;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: var(--bg);
+      cursor: pointer;
+      transition: filter 0.12s ease;
+    }
+
+    .lb-form button:hover:not(:disabled) {
+      filter: brightness(0.95);
+    }
+
+    .lb-form button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .lb-form button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
   </style>
 </head>
 <body>
@@ -369,6 +509,22 @@
       <div class="actions">
         <button type="button" id="reset" class="primary is-inert" aria-hidden="true" tabindex="-1">Reset</button>
       </div>
+      <section id="leaderboard" class="leaderboard" aria-label="Global leaderboard" aria-live="polite">
+        <h2>Global Leaderboard</h2>
+        <ol id="lbList" class="lb-list"></ol>
+        <p id="lbStatus" class="lb-status" role="status"></p>
+        <form id="lbForm" class="lb-form" autocomplete="off">
+          <input
+            id="lbName"
+            type="text"
+            name="name"
+            maxlength="24"
+            placeholder="Your name"
+            aria-label="Your name"
+          />
+          <button type="submit" id="lbSubmit">Add my score</button>
+        </form>
+      </section>
     </main>
   </div>
   <script>
@@ -551,6 +707,7 @@
           var hintStr = nextFive(pos) || "";
           renderWrong(hintStr);
           setLocked(true);
+          showLeaderboard();
           return;
         }
         typed += c;
@@ -564,6 +721,7 @@
         clearHintTrack();
         setLocked(false);
         renderTrack();
+        hideLeaderboard();
       }
 
       var layout = [
@@ -589,6 +747,180 @@
       });
 
       resetBtn.addEventListener("click", reset);
+
+      var LB_BIN = "6a0a6079250b1311c3668abc";
+      var LB_KEY =
+        "$2a$10$5lyP82lCb4Jb/z8sr2jhIe3bqH614wZTQ.GQaJS0TzfnwjgrvRXlO";
+      var LB_BASE = "https://api.jsonbin.io/v3/b/" + LB_BIN;
+      var LB_MAX = 100;
+      var LB_TOP = 10;
+
+      var lbEl = document.getElementById("leaderboard");
+      var lbList = document.getElementById("lbList");
+      var lbStatus = document.getElementById("lbStatus");
+      var lbForm = document.getElementById("lbForm");
+      var lbName = document.getElementById("lbName");
+      var lbSubmit = document.getElementById("lbSubmit");
+
+      var lbScore = 0;
+      var lbSubmitting = false;
+      var lbDone = false;
+
+      function lbSetStatus(msg, kind) {
+        lbStatus.textContent = msg || "";
+        lbStatus.classList.toggle("is-good", kind === "good");
+        lbStatus.classList.toggle("is-bad", kind === "bad");
+      }
+
+      function lbSortTrim(arr) {
+        arr.sort(function (a, b) {
+          if (b.score !== a.score) return b.score - a.score;
+          return (a.ts || 0) - (b.ts || 0);
+        });
+        return arr.slice(0, LB_MAX);
+      }
+
+      function lbRender(scores, youIdx) {
+        lbList.textContent = "";
+        var top = scores.slice(0, LB_TOP);
+        if (!top.length) {
+          var empty = document.createElement("li");
+          empty.className = "lb-empty";
+          empty.textContent = "No scores yet — be the first.";
+          lbList.appendChild(empty);
+          return;
+        }
+        top.forEach(function (entry, i) {
+          var li = document.createElement("li");
+          if (i === youIdx) li.className = "is-you";
+          var rank = document.createElement("span");
+          rank.className = "lb-rank";
+          rank.textContent = "#" + (i + 1);
+          var name = document.createElement("span");
+          name.className = "lb-name";
+          name.textContent = entry.name;
+          var score = document.createElement("span");
+          score.className = "lb-score";
+          score.textContent = entry.score;
+          li.appendChild(rank);
+          li.appendChild(name);
+          li.appendChild(score);
+          lbList.appendChild(li);
+        });
+      }
+
+      function lbFetchScores() {
+        return fetch(LB_BASE + "/latest", {
+          headers: { "X-Access-Key": LB_KEY }
+        }).then(function (res) {
+          if (!res.ok) throw new Error("read failed");
+          return res.json();
+        }).then(function (data) {
+          var rec = data && data.record;
+          return rec && Array.isArray(rec.scores) ? rec.scores : [];
+        });
+      }
+
+      function lbRefreshSubmitState() {
+        if (lbSubmitting || lbDone) return;
+        lbSubmit.disabled = lbScore < 1 || !lbName.value.trim();
+      }
+
+      function showLeaderboard() {
+        lbScore = matchedDigitCount();
+        lbDone = false;
+        lbSubmitting = false;
+        lbEl.classList.add("is-on");
+        lbForm.style.display = "";
+        lbName.value = "";
+        lbName.disabled = true;
+        lbSubmit.disabled = true;
+        lbSubmit.textContent =
+          lbScore > 0 ? "Add my score (" + lbScore + ")" : "Add my score";
+        lbList.textContent = "";
+        lbSetStatus("Loading scores…");
+        lbFetchScores().then(function (scores) {
+          lbRender(lbSortTrim(scores.slice()), -1);
+          if (lbScore < 1) {
+            lbForm.style.display = "none";
+            lbSetStatus("Match at least 1 digit to submit a score.");
+          } else {
+            lbSetStatus("");
+            lbName.disabled = false;
+            lbRefreshSubmitState();
+          }
+        }).catch(function () {
+          if (lbScore < 1) lbForm.style.display = "none";
+          lbSetStatus(
+            "Couldn't reach the leaderboard. Try again in a bit.",
+            "bad"
+          );
+        });
+      }
+
+      function hideLeaderboard() {
+        lbEl.classList.remove("is-on");
+        lbList.textContent = "";
+        lbSetStatus("");
+        lbForm.style.display = "";
+        lbName.value = "";
+        lbName.disabled = false;
+        lbSubmit.disabled = false;
+        lbSubmitting = false;
+        lbDone = false;
+      }
+
+      lbName.addEventListener("input", lbRefreshSubmitState);
+
+      lbForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (lbSubmitting || lbDone) return;
+        var name = lbName.value.trim().replace(/\s+/g, " ").slice(0, 24);
+        if (!name || lbScore < 1) return;
+
+        lbSubmitting = true;
+        lbName.disabled = true;
+        lbSubmit.disabled = true;
+        lbSubmit.textContent = "Submitting…";
+        lbSetStatus("");
+
+        var entry = { name: name, score: lbScore, ts: Date.now() };
+
+        lbFetchScores().then(function (scores) {
+          var arr = lbSortTrim(scores.concat([entry]));
+          return fetch(LB_BASE, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Access-Key": LB_KEY
+            },
+            body: JSON.stringify({ scores: arr })
+          }).then(function (res) {
+            if (!res.ok) throw new Error("write failed");
+            return arr;
+          });
+        }).then(function (arr) {
+          lbDone = true;
+          lbSubmitting = false;
+          lbForm.style.display = "none";
+          var youIdx = arr.indexOf(entry);
+          lbRender(arr, youIdx);
+          if (youIdx >= 0 && youIdx < LB_TOP) {
+            lbSetStatus("You're #" + (youIdx + 1) + " — nice.", "good");
+          } else {
+            lbSetStatus("Score added. Keep practicing.", "good");
+          }
+        }).catch(function () {
+          lbSubmitting = false;
+          lbName.disabled = false;
+          lbSubmit.disabled = false;
+          lbSubmit.textContent = "Add my score (" + lbScore + ")";
+          lbSetStatus(
+            "Submit failed — check your connection and try again.",
+            "bad"
+          );
+        });
+      });
 
       document.addEventListener("keydown", function (e) {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
